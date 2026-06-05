@@ -1,0 +1,11 @@
+{
+  "name": "Isotropy Burned LUNC",
+  "symbol": "isLUNC",
+  "decimals": 6,
+  "initial_balances": [],
+  "mint": {
+    "minter": "terra1controllerplaceholder00000000000000000000",
+    "cap": null
+  },
+  "marketing": null
+}

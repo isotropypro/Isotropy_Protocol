@@ -1,0 +1,11 @@
+{
+  "owner": "terra15gtmpmr4mwlyuku4ajjr6frshc0dznj34kwgsg",
+  "burn_address": "terra1sk06e3dyexuq4shw77y3dsv480xv42mq73anxu",
+  "protocol_fee_address": "terra15gtmpmr4mwlyuku4ajjr6frshc0dznj34kwgsg",
+  "protocol_fee_rate": "0.10",
+  "token_code_id": 0,
+  "token_label": "isotropy-token-testnet",
+  "burn_denom": "uluna",
+  "cycle_duration_seconds": 600,
+  "initial_cycle_start_timestamp": 1780419549
+}

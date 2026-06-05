@@ -1,0 +1,11 @@
+{
+  "name": "Isotropy Burned LUNC",
+  "symbol": "isLUNC",
+  "decimals": 6,
+  "initial_balances": [],
+  "mint": {
+    "minter": "terra1ad5cva3hv82zg6p36n6vhszsd7ftznem85tgv94w2pmu332gc3jsqs9kdk",
+    "cap": null
+  },
+  "marketing": null
+}
