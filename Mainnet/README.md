@@ -19,15 +19,20 @@ Not included:
 ## Mainnet Deployment
 
 - Chain ID: `columbus-5`
-- Controller code ID: `11401`
+- Controller code ID: `11405`
+- Previous controller code ID: `11401`
+- Migration tx hash: `D751595E93A1E3C764CED5BDDDE04DBE836851140E75336D295A5FD83D2662EB`
 - Controller address: `terra1ad5cva3hv82zg6p36n6vhszsd7ftznem85tgv94w2pmu332gc3jsqs9kdk`
-- Controller wasm SHA256: `0a0831ef37349bdb464b975fbe3655223ee7e5bfee1c66bc55b20a02c2faa9d0`
+- Controller wasm SHA256: `18b057e34e0069dc3f2703971ee668aac72b1ca4759114129294c7d67fdc39fd`
 - Token code ID: `11400`
 - Token address: `terra1h9dg99v9nt22zsvd959cjtttmfp8x0paqtuegwecsjd3py2f9mqq5vrss3`
 - Token wasm SHA256: `8dcbd90908e767984f76eb0df138301ac60cd6136c14e12814b4357f02522b97`
 - Burn denom: `uluna`
 - Cycle duration: `86400` seconds
-- Initial cycle start timestamp: `1780761600`
+- Initial cycle start timestamp: `1781020800`
+- Delayed start authority: `terra15gtmpmr4mwlyuku4ajjr6frshc0dznj34kwgsg`
+
+The mainnet controller was migrated in place, so the contract address stayed the same while the active code changed from `11401` to `11405`.
 
 ## Protocol Math
 
@@ -57,7 +62,7 @@ Get-FileHash .\artifacts\isotropy_token.wasm -Algorithm SHA256
 
 Expected:
 
-- `isotropy_protocol.wasm`: `0a0831ef37349bdb464b975fbe3655223ee7e5bfee1c66bc55b20a02c2faa9d0`
+- `isotropy_protocol.wasm`: `18b057e34e0069dc3f2703971ee668aac72b1ca4759114129294c7d67fdc39fd`
 - `isotropy_token.wasm`: `8dcbd90908e767984f76eb0df138301ac60cd6136c14e12814b4357f02522b97`
 
 ## Review Notes
@@ -66,4 +71,5 @@ Expected:
 - Message and query types live in `src/msg.rs`.
 - Persistent state layout lives in `src/state.rs`.
 - The CW20 token implementation lives in `token/src/lib.rs`.
+- `examples/controller-migrate.json` matches the executed mainnet migration payload for code `11405`.
 - This package is intentionally limited to contract review and artifact reproduction.

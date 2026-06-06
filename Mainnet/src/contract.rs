@@ -78,6 +78,7 @@ pub fn instantiate(
             .burn_denom
             .unwrap_or_else(|| DEFAULT_BURN_DENOM.to_string()),
         cycle_duration_seconds,
+        delayed_start_authority: None,
     };
     CONFIG.save(deps.storage, &config)?;
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -161,6 +162,9 @@ pub fn execute(
         ExecuteMsg::Stake { amount } => execute_stake(deps, env, info, amount),
         ExecuteMsg::Unstake { amount } => execute_unstake(deps, env, info, amount),
         ExecuteMsg::ClaimRewards {} => execute_claim_rewards(deps, env, info),
+        ExecuteMsg::UpdateDelayedStart { start_timestamp } => {
+            execute_update_delayed_start(deps, env, info, start_timestamp)
+        }
         ExecuteMsg::UpdateConfig {
             owner,
             burn_address,
@@ -483,6 +487,37 @@ fn execute_claim_rewards(
         ]))
 }
 
+fn execute_update_delayed_start(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    start_timestamp: u64,
+) -> Result<Response, ContractError> {
+    ensure_no_funds(&info)?;
+
+    let config = CONFIG.load(deps.storage)?;
+    let mut state = GLOBAL_STATE.load(deps.storage)?;
+    ensure_can_update_delayed_start(&env, &state)?;
+
+    let authorized = info.sender == config.owner
+        || config
+            .delayed_start_authority
+            .as_ref()
+            .is_some_and(|authority| info.sender == *authority);
+    if !authorized {
+        return Err(ContractError::Unauthorized);
+    }
+
+    state.current_cycle_start = validate_delayed_start_timestamp(&env, start_timestamp)?;
+    GLOBAL_STATE.save(deps.storage, &state)?;
+
+    Ok(Response::new().add_attributes([
+        attr("action", "update_delayed_start"),
+        attr("sender", info.sender.as_str()),
+        attr("start_timestamp", state.current_cycle_start.to_string()),
+    ]))
+}
+
 fn execute_update_config(
     deps: DepsMut,
     info: MessageInfo,
@@ -529,12 +564,25 @@ fn execute_update_config(
 }
 
 #[entry_point]
-pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
     let previous = get_contract_version(deps.storage).ok();
-    let config = CONFIG.load(deps.storage)?;
+    let mut config = CONFIG.load(deps.storage)?;
     let mut state = GLOBAL_STATE.load(deps.storage)?;
     validate_protocol_fee_rate(config.protocol_fee_rate)?;
+
+    if let Some(delayed_start_authority) = msg.delayed_start_authority {
+        config.delayed_start_authority =
+            Some(deps.api.addr_validate(&delayed_start_authority)?);
+    }
+
+    if let Some(initial_cycle_start_timestamp) = msg.initial_cycle_start_timestamp {
+        ensure_can_update_delayed_start(&env, &state)?;
+        state.current_cycle_start =
+            validate_delayed_start_timestamp(&env, initial_cycle_start_timestamp)?;
+    }
+
     state.emitted_cycle_count = count_historical_emitted_cycles(deps.storage)?;
+    CONFIG.save(deps.storage, &config)?;
     GLOBAL_STATE.save(deps.storage, &state)?;
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
@@ -543,7 +591,18 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
         attr("contract_name", CONTRACT_NAME),
         attr("contract_version", CONTRACT_VERSION),
         attr("emitted_cycle_count", state.emitted_cycle_count.to_string()),
+        attr(
+            "current_cycle_start",
+            state.current_cycle_start.to_string(),
+        ),
     ]);
+
+    if let Some(delayed_start_authority) = config.delayed_start_authority {
+        response = response.add_attribute(
+            "delayed_start_authority",
+            delayed_start_authority.to_string(),
+        );
+    }
 
     if let Some(previous) = previous {
         response = response.add_attributes([
@@ -575,6 +634,7 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
         owner: config.owner.to_string(),
+        delayed_start_authority: config.delayed_start_authority.map(|addr| addr.to_string()),
         burn_address: config.burn_address,
         protocol_fee_address: config.protocol_fee_address,
         protocol_fee_rate: config.protocol_fee_rate,
@@ -860,6 +920,22 @@ fn token_address(config: &Config) -> Result<Addr, ContractError> {
         .ok_or(ContractError::TokenNotConfigured)
 }
 
+fn ensure_can_update_delayed_start(env: &Env, state: &GlobalState) -> Result<(), ContractError> {
+    if state.current_cycle_id != 1 || env.block.time.seconds() >= state.current_cycle_start {
+        return Err(ContractError::DelayedStartLocked);
+    }
+
+    Ok(())
+}
+
+fn validate_delayed_start_timestamp(env: &Env, start_timestamp: u64) -> Result<u64, ContractError> {
+    if start_timestamp < env.block.time.seconds() {
+        return Err(ContractError::InvalidInitialCycleStartTimestamp);
+    }
+
+    Ok(start_timestamp)
+}
+
 fn ensure_no_funds(info: &MessageInfo) -> Result<(), ContractError> {
     if info.funds.is_empty() {
         return Ok(());
@@ -1049,6 +1125,12 @@ mod tests {
             .unwrap()
     }
 
+    fn query_current_cycle_response(app: &App, controller: &Addr) -> CurrentCycleResponse {
+        app.wrap()
+            .query_wasm_smart(controller, &QueryMsg::CurrentCycle {})
+            .unwrap()
+    }
+
     fn query_token_balance(app: &App, token: &Addr, address: &str) -> Uint128 {
         let response: Cw20BalanceResponse = app
             .wrap()
@@ -1114,6 +1196,7 @@ mod tests {
                     token_address: Some(Addr::unchecked("token")),
                     burn_denom: "uluna".to_string(),
                     cycle_duration_seconds,
+                    delayed_start_authority: None,
                 },
             )
             .unwrap();
@@ -1464,7 +1547,7 @@ mod tests {
                 },
                 &[],
                 "isotropy-controller",
-                None,
+                Some("owner".to_string()),
             )
             .unwrap();
 
@@ -1491,6 +1574,258 @@ mod tests {
 
         let err_text = format!("{err:?}");
         assert!(err_text.contains("cycle has not started yet"));
+    }
+
+    #[test]
+    fn migrate_can_assign_delayed_start_authority_and_reschedule_cycle_one() {
+        let mut app = mock_app();
+        let controller_code_id = app.store_code(controller_contract());
+        let token_code_id = app.store_code(token_contract());
+        let initial_start = app.block_info().time.seconds() + 300;
+        let migrated_start = initial_start + 259_200;
+
+        let controller = app
+            .instantiate_contract(
+                controller_code_id,
+                Addr::unchecked("owner"),
+                &InstantiateMsg {
+                    owner: None,
+                    burn_address: "burn-placeholder".to_string(),
+                    protocol_fee_address: "fee-placeholder".to_string(),
+                    protocol_fee_rate: None,
+                    token_code_id,
+                    token_label: Some("isotropy-token".to_string()),
+                    burn_denom: Some("uluna".to_string()),
+                    cycle_duration_seconds: Some(100),
+                    initial_cycle_start_timestamp: Some(initial_start),
+                },
+                &[],
+                "isotropy-controller",
+                Some("owner".to_string()),
+            )
+            .unwrap();
+
+        let new_code_id = app.store_code(controller_contract());
+        app.migrate_contract(
+            Addr::unchecked("owner"),
+            controller.clone(),
+            &MigrateMsg {
+                delayed_start_authority: Some("deployer".to_string()),
+                initial_cycle_start_timestamp: Some(migrated_start),
+            },
+            new_code_id,
+        )
+        .unwrap();
+
+        let config = query_config_response(&app, &controller);
+        let current_cycle = query_current_cycle_response(&app, &controller);
+        assert_eq!(config.delayed_start_authority, Some("deployer".to_string()));
+        assert_eq!(current_cycle.start_time, migrated_start);
+    }
+
+    #[test]
+    fn delayed_start_authority_can_move_start_in_both_directions_before_launch() {
+        let mut app = mock_app();
+        let controller_code_id = app.store_code(controller_contract());
+        let token_code_id = app.store_code(token_contract());
+        let initial_start = app.block_info().time.seconds() + 1_000;
+
+        let controller = app
+            .instantiate_contract(
+                controller_code_id,
+                Addr::unchecked("owner"),
+                &InstantiateMsg {
+                    owner: None,
+                    burn_address: "burn-placeholder".to_string(),
+                    protocol_fee_address: "fee-placeholder".to_string(),
+                    protocol_fee_rate: None,
+                    token_code_id,
+                    token_label: Some("isotropy-token".to_string()),
+                    burn_denom: Some("uluna".to_string()),
+                    cycle_duration_seconds: Some(100),
+                    initial_cycle_start_timestamp: Some(initial_start),
+                },
+                &[],
+                "isotropy-controller",
+                Some("owner".to_string()),
+            )
+            .unwrap();
+
+        let new_code_id = app.store_code(controller_contract());
+        app.migrate_contract(
+            Addr::unchecked("owner"),
+            controller.clone(),
+            &MigrateMsg {
+                delayed_start_authority: Some("deployer".to_string()),
+                initial_cycle_start_timestamp: None,
+            },
+            new_code_id,
+        )
+        .unwrap();
+
+        let later_start = initial_start + 500;
+        app.execute_contract(
+            Addr::unchecked("deployer"),
+            controller.clone(),
+            &ExecuteMsg::UpdateDelayedStart {
+                start_timestamp: later_start,
+            },
+            &[],
+        )
+        .unwrap();
+        assert_eq!(query_current_cycle_response(&app, &controller).start_time, later_start);
+
+        let earlier_start = initial_start + 100;
+        app.execute_contract(
+            Addr::unchecked("deployer"),
+            controller.clone(),
+            &ExecuteMsg::UpdateDelayedStart {
+                start_timestamp: earlier_start,
+            },
+            &[],
+        )
+        .unwrap();
+        assert_eq!(
+            query_current_cycle_response(&app, &controller).start_time,
+            earlier_start
+        );
+    }
+
+    #[test]
+    fn delayed_start_update_rejects_unauthorized_or_past_requests() {
+        let mut app = mock_app();
+        let controller_code_id = app.store_code(controller_contract());
+        let token_code_id = app.store_code(token_contract());
+        let now = app.block_info().time.seconds();
+        let initial_start = now + 600;
+
+        let controller = app
+            .instantiate_contract(
+                controller_code_id,
+                Addr::unchecked("owner"),
+                &InstantiateMsg {
+                    owner: None,
+                    burn_address: "burn-placeholder".to_string(),
+                    protocol_fee_address: "fee-placeholder".to_string(),
+                    protocol_fee_rate: None,
+                    token_code_id,
+                    token_label: Some("isotropy-token".to_string()),
+                    burn_denom: Some("uluna".to_string()),
+                    cycle_duration_seconds: Some(100),
+                    initial_cycle_start_timestamp: Some(initial_start),
+                },
+                &[],
+                "isotropy-controller",
+                Some("owner".to_string()),
+            )
+            .unwrap();
+
+        let new_code_id = app.store_code(controller_contract());
+        app.migrate_contract(
+            Addr::unchecked("owner"),
+            controller.clone(),
+            &MigrateMsg {
+                delayed_start_authority: Some("deployer".to_string()),
+                initial_cycle_start_timestamp: None,
+            },
+            new_code_id,
+        )
+        .unwrap();
+
+        let unauthorized = app
+            .execute_contract(
+                Addr::unchecked("mallory"),
+                controller.clone(),
+                &ExecuteMsg::UpdateDelayedStart {
+                    start_timestamp: initial_start + 60,
+                },
+                &[],
+            )
+            .unwrap_err();
+        assert!(format!("{unauthorized:?}").contains("unauthorized"));
+
+        let invalid_timestamp = app
+            .execute_contract(
+                Addr::unchecked("deployer"),
+                controller,
+                &ExecuteMsg::UpdateDelayedStart {
+                    start_timestamp: now.saturating_sub(1),
+                },
+                &[],
+            )
+            .unwrap_err();
+        assert!(format!("{invalid_timestamp:?}").contains("invalid initial cycle start timestamp"));
+    }
+
+    #[test]
+    fn delayed_start_cannot_be_changed_after_cycles_have_started() {
+        let mut app = mock_app();
+        let controller_code_id = app.store_code(controller_contract());
+        let token_code_id = app.store_code(token_contract());
+        let initial_start = app.block_info().time.seconds() + 120;
+
+        let controller = app
+            .instantiate_contract(
+                controller_code_id,
+                Addr::unchecked("owner"),
+                &InstantiateMsg {
+                    owner: None,
+                    burn_address: "burn-placeholder".to_string(),
+                    protocol_fee_address: "fee-placeholder".to_string(),
+                    protocol_fee_rate: None,
+                    token_code_id,
+                    token_label: Some("isotropy-token".to_string()),
+                    burn_denom: Some("uluna".to_string()),
+                    cycle_duration_seconds: Some(100),
+                    initial_cycle_start_timestamp: Some(initial_start),
+                },
+                &[],
+                "isotropy-controller",
+                Some("owner".to_string()),
+            )
+            .unwrap();
+
+        let new_code_id = app.store_code(controller_contract());
+        app.migrate_contract(
+            Addr::unchecked("owner"),
+            controller.clone(),
+            &MigrateMsg {
+                delayed_start_authority: Some("deployer".to_string()),
+                initial_cycle_start_timestamp: None,
+            },
+            new_code_id,
+        )
+        .unwrap();
+
+        app.update_block(|block| {
+            block.time = Timestamp::from_seconds(initial_start);
+        });
+
+        let update_err = app
+            .execute_contract(
+                Addr::unchecked("deployer"),
+                controller.clone(),
+                &ExecuteMsg::UpdateDelayedStart {
+                    start_timestamp: initial_start + 3600,
+                },
+                &[],
+            )
+            .unwrap_err();
+        assert!(format!("{update_err:?}").contains("delayed start can only be updated before cycle 1 begins"));
+
+        let next_code_id = app.store_code(controller_contract());
+        let migrate_err = app
+            .migrate_contract(
+                Addr::unchecked("owner"),
+                controller,
+                &MigrateMsg {
+                    delayed_start_authority: Some("deployer".to_string()),
+                    initial_cycle_start_timestamp: Some(initial_start + 7200),
+                },
+                next_code_id,
+            )
+            .unwrap_err();
+        assert!(format!("{migrate_err:?}").contains("delayed start can only be updated before cycle 1 begins"));
     }
 
     #[test]

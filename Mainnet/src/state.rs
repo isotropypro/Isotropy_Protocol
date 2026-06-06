@@ -27,6 +27,8 @@ pub struct Config {
     pub token_address: Option<Addr>,
     pub burn_denom: String,
     pub cycle_duration_seconds: u64,
+    #[serde(default)]
+    pub delayed_start_authority: Option<Addr>,
 }
 
 #[cw_serde]

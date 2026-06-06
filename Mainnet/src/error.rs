@@ -25,6 +25,9 @@ pub enum ContractError {
     #[error("invalid initial cycle start timestamp")]
     InvalidInitialCycleStartTimestamp,
 
+    #[error("delayed start can only be updated before cycle 1 begins")]
+    DelayedStartLocked,
+
     #[error("invalid protocol fee rate")]
     InvalidProtocolFeeRate,
 

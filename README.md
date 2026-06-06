@@ -76,10 +76,11 @@ Core mechanics:
 
 ### Mainnet
 
+- controller code id: `11405` (previous: `11401`)
 - chain: `columbus-5`
 - controller: `terra1ad5cva3hv82zg6p36n6vhszsd7ftznem85tgv94w2pmu332gc3jsqs9kdk`
 - token: `terra1h9dg99v9nt22zsvd959cjtttmfp8x0paqtuegwecsjd3py2f9mqq5vrss3`
-- controller SHA256: `0a0831ef37349bdb464b975fbe3655223ee7e5bfee1c66bc55b20a02c2faa9d0`
+- controller SHA256: `18b057e34e0069dc3f2703971ee668aac72b1ca4759114129294c7d67fdc39fd`
 - token SHA256: `8dcbd90908e767984f76eb0df138301ac60cd6136c14e12814b4357f02522b97`
 
 ### Testnet
@@ -119,5 +120,6 @@ Get-FileHash .\artifacts\isotropy_token.wasm -Algorithm SHA256
 ## Notes
 
 - package-specific math notes live in `Mainnet/README.md` and `Testnet/README.md`
+- `Mainnet/` now reflects the migrated production controller package for code `11405`
 - testnet uses the same core per-cycle math but a much shorter cycle duration
 - examples in `Mainnet/examples/` and `Testnet/examples/` help reconstruct payload shapes without private deployment tooling

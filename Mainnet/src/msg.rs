@@ -23,6 +23,7 @@ pub enum ExecuteMsg {
     Stake { amount: Uint128 },
     Unstake { amount: Uint128 },
     ClaimRewards {},
+    UpdateDelayedStart { start_timestamp: u64 },
     UpdateConfig {
         owner: Option<String>,
         burn_address: Option<String>,
@@ -38,7 +39,10 @@ pub enum Cw20HookMsg {
 }
 
 #[cw_serde]
-pub struct MigrateMsg {}
+pub struct MigrateMsg {
+    pub delayed_start_authority: Option<String>,
+    pub initial_cycle_start_timestamp: Option<u64>,
+}
 
 #[cw_serde]
 #[derive(QueryResponses)]
@@ -62,6 +66,7 @@ pub enum QueryMsg {
 #[cw_serde]
 pub struct ConfigResponse {
     pub owner: String,
+    pub delayed_start_authority: Option<String>,
     pub burn_address: String,
     pub protocol_fee_address: String,
     pub protocol_fee_rate: Decimal,
