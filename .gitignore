@@ -1,4 +1,8 @@
-﻿target/
+ï»¿target/
 *.wasm
 *.wasm.gz
 
+
+# Local verification builds; published artifacts remain tracked.
+**/target_compat_wasm/
+**/artifacts-rebuilt/

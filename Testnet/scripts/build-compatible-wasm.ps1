@@ -1,7 +1,7 @@
 param(
-    [string]$ArtifactsDir = ".\artifacts",
+    [string]$ArtifactsDir = ".\artifacts-rebuilt",
     [string]$TargetDir = "target_compat_wasm",
-    [string]$RustToolchain = "stable",
+    [string]$RustToolchain = "1.85.0-x86_64-pc-windows-msvc",
     [string]$WasmOptBin = ""
 )
 
@@ -41,11 +41,7 @@ function Resolve-WasmOpt {
         return (Resolve-Path -LiteralPath $WasmOptBin).Path
     }
 
-    $command = Get-Command "wasm-opt" -ErrorAction SilentlyContinue
-    if ($null -ne $command) {
-        return $command.Source
-    }
-
+    # Published artifacts use no wasm-opt pass. Never auto-detect it from PATH.
     return $null
 }
 
@@ -102,6 +98,7 @@ New-Item -ItemType Directory -Force -Path $controllerTargetDir | Out-Null
 New-Item -ItemType Directory -Force -Path $tokenTargetDir | Out-Null
 
 $previousRustFlags = $env:RUSTFLAGS
+$previousEncodedRustFlags = $env:CARGO_ENCODED_RUSTFLAGS
 
 try {
     # Force a Wasm MVP-compatible build for older CosmWasm hosts such as rebel-2.
@@ -111,6 +108,7 @@ try {
 
     Invoke-Build -CargoArgs @(
         'build',
+        '--locked',
         '--release',
         '--lib',
         '--manifest-path', $controllerManifest,
@@ -120,6 +118,7 @@ try {
 
     Invoke-Build -CargoArgs @(
         'build',
+        '--locked',
         '--release',
         '--lib',
         '--manifest-path', $tokenManifest,
@@ -150,4 +149,5 @@ try {
 finally {
     Pop-Location
     $env:RUSTFLAGS = $previousRustFlags
+    $env:CARGO_ENCODED_RUSTFLAGS = $previousEncodedRustFlags
 }

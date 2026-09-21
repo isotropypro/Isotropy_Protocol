@@ -23,7 +23,8 @@ Then:
 1. Open the package README.
 2. Run `cargo test`.
 3. Rebuild artifacts with `scripts/build-compatible-wasm.ps1`.
-4. Compare SHA256 hashes with the published values.
+4. Compare rebuilt SHA256 hashes with the published values; see [BUILD.md](BUILD.md).
+5. For mainnet, verify the active on-chain code and inspect live state using [Mainnet/VERIFICATION.md](Mainnet/VERIFICATION.md).
 
 ## What Is Included
 
@@ -95,27 +96,31 @@ Core mechanics:
 
 ### Mainnet
 
-From `for_Github_public\Mainnet`:
+From `Mainnet/`:
 
 ```powershell
 cargo test
 cargo run --bin schema
 powershell -ExecutionPolicy Bypass -File .\scripts\build-compatible-wasm.ps1
-Get-FileHash .\artifacts\isotropy_protocol.wasm -Algorithm SHA256
-Get-FileHash .\artifacts\isotropy_token.wasm -Algorithm SHA256
+Get-FileHash .\artifacts-rebuilt\isotropy_protocol.wasm -Algorithm SHA256
+Get-FileHash .\artifacts-rebuilt\isotropy_token.wasm -Algorithm SHA256
 ```
 
 ### Testnet
 
-From `for_Github_public\Testnet`:
+From `Testnet/`:
 
 ```powershell
 cargo test
 cargo run --bin schema
 powershell -ExecutionPolicy Bypass -File .\scripts\build-compatible-wasm.ps1
-Get-FileHash .\artifacts\isotropy_protocol.wasm -Algorithm SHA256
-Get-FileHash .\artifacts\isotropy_token.wasm -Algorithm SHA256
+Get-FileHash .\artifacts-rebuilt\isotropy_protocol.wasm -Algorithm SHA256
+Get-FileHash .\artifacts-rebuilt\isotropy_token.wasm -Algorithm SHA256
 ```
+
+## Code versus schedule
+
+Start-date changes through `update_delayed_start` modify contract storage and do not change the WASM checksum. The schedule observed on 2026-09-21 was cycle 1 starting at `1793808000` (2026-11-04 16:00 UTC); always query live state again. Hash verification and current configuration/admin review are separate checks. Historical migration payloads remain historical records. See [mainnet verification](Mainnet/VERIFICATION.md).
 
 ## Notes
 

@@ -41,13 +41,15 @@ Not included:
 
 ## Build And Test
 
-From `for_Github_public\Testnet`:
+From `Testnet/` in a clone of this repository:
 
 ```powershell
 cargo test
 cargo run --bin schema
 powershell -ExecutionPolicy Bypass -File .\scripts\build-compatible-wasm.ps1
 ```
+
+The pinned helper writes to `artifacts-rebuilt/`, preserving published artifacts. See [BUILD.md](../BUILD.md) for the exact toolchain and reproduction procedure.
 
 ## SHA Verification
 

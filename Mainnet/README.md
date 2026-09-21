@@ -29,10 +29,13 @@ Not included:
 - Token wasm SHA256: `8dcbd90908e767984f76eb0df138301ac60cd6136c14e12814b4357f02522b97`
 - Burn denom: `uluna`
 - Cycle duration: `86400` seconds
-- Initial cycle start timestamp: `1781020800`
+- Historical start set by migration: `1781020800` (2026-06-09 16:00 UTC)
+- Scheduled cycle 1 start observed on 2026-09-21: `1793808000` (2026-11-04 16:00 UTC); query live state for the current schedule.
 - Delayed start authority: `terra15gtmpmr4mwlyuku4ajjr6frshc0dznj34kwgsg`
 
 The mainnet controller was migrated in place, so the contract address stayed the same while the active code changed from `11401` to `11405`.
+
+See [VERIFICATION.md](VERIFICATION.md) for live code/state checks, reschedule history and administrative permissions. Rescheduling changes storage, not the published WASM checksum.
 
 ## Protocol Math
 
@@ -45,13 +48,15 @@ The mainnet controller was migrated in place, so the contract address stayed the
 
 ## Build And Test
 
-From `for_Github_public\Mainnet`:
+From `Mainnet/` in a clone of this repository:
 
 ```powershell
 cargo test
 cargo run --bin schema
 powershell -ExecutionPolicy Bypass -File .\scripts\build-compatible-wasm.ps1
 ```
+
+The helper uses pinned Rust 1.85.0 for Windows MSVC, locked dependencies and no implicit wasm-opt pass. Output goes to `artifacts-rebuilt/` so published files stay intact. See [BUILD.md](../BUILD.md).
 
 ## SHA Verification
 
@@ -64,6 +69,12 @@ Expected:
 
 - `isotropy_protocol.wasm`: `18b057e34e0069dc3f2703971ee668aac72b1ca4759114129294c7d67fdc39fd`
 - `isotropy_token.wasm`: `8dcbd90908e767984f76eb0df138301ac60cd6136c14e12814b4357f02522b97`
+
+Compare rebuilt files in `artifacts-rebuilt/` against the same expected hashes. To additionally verify the active on-chain code and inspect live state:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-mainnet.ps1
+```
 
 ## Review Notes
 
